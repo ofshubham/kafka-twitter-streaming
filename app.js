@@ -35,6 +35,9 @@ client.createTopics(topicsToCreate, (error, result) => {
 app.get("/", (req, res) => res.sendFile("index.html"));
 
 io.on("connection", (socket) => {
+  Producer = kafka.Producer;
+  KeyedMessage = kafka.KeyedMessage;
+  producer = new Producer(client);
   var stream = {};
   users.push(socket);
   console.log("Connected: Number of users online => %s", users.length);
@@ -45,7 +48,7 @@ io.on("connection", (socket) => {
       stream.destroy();
     }
     stream = tClient.stream("statuses/filter", { track: data.keyword });
-    streamAndSave(socket, stream);
+    streamAndSave(socket, stream, producer);
   });
 
   socket.on("disconnect", (data) => {
@@ -62,14 +65,14 @@ io.on("connection", (socket) => {
 function isEmpty(obj) {
   return Object.keys(obj).length === 0;
 }
-function streamAndSave(socket, stream) {
+function streamAndSave(socket, stream, producer) {
   stream.on("data", function (event) {
     tweet = {
       id: event.id_str,
       username: event.user.screen_name,
       tweet: event.truncated ? event.extended_tweet.full_text : event.text,
     };
-    pushToKafka(tweet);
+    pushToKafka(tweet, producer);
     socket.emit("tweet", tweet);
   });
 
@@ -77,18 +80,13 @@ function streamAndSave(socket, stream) {
     console.log(err);
   });
 }
-function pushToKafka(tweet) {
-  Producer = kafka.Producer;
-  KeyedMessage = kafka.KeyedMessage;
-  producer = new Producer(client);
+function pushToKafka(tweet, producer) {
   let { id, ...tweetWithoutID } = tweet;
-  // console.log(id, tweetWithoutID);
   tweetWithoutID = JSON.stringify(tweetWithoutID);
   payloads = [
     { topic: mainTopic, messages: tweetWithoutID, partition: 0, key: id },
   ];
   producer.send(payloads, function (err, data) {
-    // console.log(data);
     if (err) {
       console.log(err);
     }

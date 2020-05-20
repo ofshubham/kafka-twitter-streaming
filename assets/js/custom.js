@@ -32,6 +32,7 @@ function emitKeyword() {
   socket.emit("keyword", reqObject);
   tweets = [];
   i = 0;
+  $("div#count").text("Count: " + i);
 }
 
 $(document).ready(function () {
